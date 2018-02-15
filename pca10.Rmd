@@ -1,0 +1,271 @@
+---
+title: "Importance Sampling"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+In this short note, we provide a example implementation of an importance sampling algorithm. 
+
+In importance sampling, we have a natural distribution $p$ for a random variable $X$. A random variable $V$ satisfies the conditional distribution $V|X=x\sim D_{x}$. We define $s = P[V\geq \zeta]$ where $\zeta$ is chosen such that the marginal probability of $ P[V\geq \zeta]$ is $0.5$. Our goal is to find a new distribution $q_0$ instead of $A$ such that sampling from $B$ gives a reduced-variance estimator of $s$ than sampling from $A$.
+
+We let the natural distribution of $X$ be the uniform distribution on the square $[0,1]^2$ and $[-1,0]^2$, that is, uniform on the union of the unit squares in the first and third quadrants.
+
+We let $q_0$ denote both the natural distribution and the starting distribution. We let $q_0$ be the uniform distribution on $[-1,1]^2$, that is, uniform on the union of the unit squares in all four quadrants.
+
+We let $V|X=x$ be $N(10,1)$ if $x$ is in the unit square $[0,1]^2$. $V|x=x$ is deterministically zero otherwise.
+
+
+
+```{r, echo= FALSE, results='hide', message=FALSE, warning=FALSE}
+library(distr)
+library(plyr)
+library(mclust)
+library(MASS)
+library(ggplot2)
+library(mvtnorm)
+```
+
+We set our total number $n$ of samples to be $2000$. We set our first stage number $m$ of samples to be $sqrt(n^{2/3})$. We sample $X$ from the uniform distribution on $[-1,1]^2$.
+
+For each $x$, we sample $V|X=x$ be $N(10,1)$ if $x$ is in the unit square $[0,1]^2$. $V|x=x$ is deterministically zero otherwise.
+
+We set $\zeta=10$ such that $P(V>\zeta)=0.25$.
+
+
+```{r]}
+n <- 2000 # total samples
+m <- floor (n^(2/3)) # first-stage samples
+size <- floor(sqrt(m))  # number of k-means clusters
+x.old1 <- runif(m,-1,1)
+x.old2 <- runif(m,-1,1)
+x.old <- cbind(x.old1, x.old2)
+
+v <- function(x){
+  ans <- 0
+  if (x[1]>0 & x[2] > 0){ans <- rnorm(1,10,1)}
+  return(ans)
+}
+
+# find cutoff z such that P(V>z)=0.25
+zeta <- 10 
+
+```
+
+
+
+```{r}
+y <- unlist(lapply(1:m, function(x) v(x.old[x,]))) # these are the sampled V's
+sum(y<0)/length(y) 
+# This should go to 0.75 as m goes to infinity
+```
+
+We visualize the $Y$'s. 
+```{r plot1}
+color <- ifelse(y>=zeta,"blue","red")
+plot(x.old, col=color, main = "First stage samples of x, color by values of Y.") 
+```
+
+In this graph above, we see as expected that the first quadrant is half blue half red. Other three quadrants are all red. 
+
+
+We perform k-means clustering.
+```{r}
+s <- ifelse(y>zeta, 1, 0)
+model <- kmeans(x.old, size)
+```
+
+We check the size of of each cluster.
+```{r}
+cluster.size.count <- unlist(lapply(1:size,function(x){length(which(model$cluster == x))}))
+barplot(cluster.size.count, main="Size of Clusters", 
+  	xlab="Cluster index",names.arg=1:12)
+```
+
+
+We plot the points of x, colored according to their k-means clusters. The numbers indicate cluster indices and the positions of the numbers (and the underlying triangle points) are the cluster centers.
+```{r plot2}
+plot(x.old, col = model$cluster, xlim = c(-1,1),ylim = c(-1,1))
+points(model$centers, col = 1:12, pch = 2)
+text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="black", pos=c(1), offset=-0.16)
+```
+
+We define each cluster's  proportion of $Y>10$'s as follows.
+```{r}
+cluster.prob <- unlist(lapply(1:nrow(model$centers),function(x){mean(s[which(model$cluster == x)])}))
+```
+
+
+This cluster probability shows that only the cluster centers in the first quadrant should have positive probability.  
+```{r plot3}
+barplot(cluster.prob, main="Proportion of Y>10's in the Clusters", 
+  	xlab="Cluster index",names.arg=1:12)
+```
+
+We plot clusters with positive probability. We see that only clusters that are mostly in the first quadrant have positive probability, as expected.
+```{r plot4}
+pos.prob <- which(cluster.prob>0)
+plot(x.old[which(model$cluster == pos.prob[1]),], col=1, xlim = c(-1,1),ylim = c(-1,1), main = "clusters with positive probability")
+grid()
+for (i in 2:length(pos.prob)){
+  j = which(cluster.prob>0)[i]
+  points(x.old[which(model$cluster == j),], col=i)
+}
+text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="black", pos=c(1), offset=-0.16)
+```
+
+We prepare a data frame to store the information we want.
+```{r}
+df <- data.frame(model$centers)
+names(df) <- c("centers.old1", "centers.old2")
+df$prob <- cluster.prob
+# centers.new <- matrix(unlist(lapply(1:size,function(x){colMeans(x.old[which(model$cluster == x),])})),,2)
+# df$centers.new1 <- centers.new[,1]
+# df$centers.new2 <- centers.new[,2]
+df$centers.new2 <- df$centers.old2
+df$centers.new1 <- df$centers.old1
+df
+```
+
+We prepare a Gaussian Mixture Model. First, covariances matrices, one for each cluster.
+```{r}
+sigma.new <- function(i){
+  # row.tmp <- which(model$cluster == i)
+  # ans <- matrix(0,2,2) # place holder for the 2 by 2 sigma matrix
+  # mean.tmp <- centers.new[i,]
+  # for (j in row.tmp){
+  #   point <- x.old[j,]
+  #   ans <- ans + (point-mean.tmp) %*% t((point-mean.tmp))
+  # }
+  # return(ans/length(which(model$cluster==i)))
+  cov(x.old[which(model$cluster==i),] - model$centers[i,])
+}
+```
+
+We define the probability vector $\pi=\langle \pi_1,\cdots,\pi_{\text{size}}\rangle$  for the Gaussian Mixture Model. The $\pi_j$'s should sum to $1$.
+```{r}
+cluster.size.percentage <- unlist(lapply(1:size, function(x){sum(s[which(model$cluster == x)])/sum(s)}))
+```
+
+```{r}
+barplot(cluster.size.percentage, main="Probability of Clusters", xlab="Cluster index",names.arg=1:12)
+```
+
+Second stage, sample with replacement, sample n-m many components from a total of sqrt(m) components.
+```{r}
+components <- sample(1:size,prob=cluster.size.percentage,size=(n-m),replace=TRUE)
+```
+
+
+We verify the distribution of the components. The bars shouold only be positive for those with positive probability $\pi$.
+```{r}
+hist(components)
+```
+
+```{r}
+sigma.array <- lapply(1:size, function(x) unlist(sigma.new(x)))
+mean.array <- lapply(1:size, function(x) cbind(df$centers.new1,df$centers.new2)[x,])
+df$sigma <- sigma.array
+sigma.array
+```
+
+```{r}
+gmm.pdf <- function(x){ # goal: should integrate to 1. Double check.
+  sum(unlist(lapply(1:size, function(j){dmvnorm(x, mean = unlist(mean.array[j]), sigma = matrix(unlist(sigma.array[j]),2,2))})) * cluster.size.percentage)
+  # x <- unlist(x)
+  # ans <- 0
+  # for (j in 1:size){
+  #   sigma.tmp <- matrix(unlist(sigma.array[j]),2,2)
+  #   mean.tmp <- unlist(mean.array[j])
+  #   # cluster.size.percentage[j]* 1
+  #   # (1/(2*pi)) * det(sigma.tmp)^(-0.5) * exp ( -0.5 * t(x-mean.tmp)%*% solve(sigma.tmp)%*% (x-mean.tmp))
+  #   # dmvnorm(x, mean = mean.tmp, sigma =sigma.tmp)
+  #   ans <- ans + cluster.size.percentage[j] *  dmvnorm(x, mean = mean.tmp, sigma = sigma.tmp)
+  # }
+  # return(ans)
+}
+```
+
+We plot each normal distribution in the GMM. They should line up well with the underlying original cluster points.
+
+
+
+```{r}
+plot.cluster <- function(counter){
+  num.sample <- 300
+  this.cluster.points <- rmvnorm(
+    num.sample, mean = unlist(mean.array[counter]), 
+    sigma = matrix(unlist(sigma.array[counter]),2,2)
+    )
+  df.tmp1 <- data.frame(this.cluster.points)
+  df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),2,2)) ))
+
+  df.tmp2 <- data.frame(cbind(x.old[which(model$cluster==counter),],0))
+  names(df.tmp2) <- names(df.tmp1)
+  df.tmp1 <- rbind(df.tmp1, df.tmp2)
+
+  rbPal <- colorRampPalette(c('red','blue'))
+
+  #This adds a column of color values
+  # based on the y values
+  df.tmp1$Col <- rbPal(nrow(df.tmp1))[as.numeric(cut(df.tmp1$prob,breaks = nrow(df.tmp1)))]
+
+  # plot(x.old[which(model$cluster == pos.prob[1]),],pch=1, col=1, xlim = c(-1,1),ylim = c(-1,1), main =paste("sampling from the ",counter,"-th normal distribution"))
+  # grid()
+  # for (i in 2:length(pos.prob)){
+  #   j = which(cluster.prob>0)[i]
+  #   points(x.old[which(model$cluster == j),], pch=1, col=i)
+  # }
+  # text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="black", pos=c(1), offset=-0.16)
+  plot(x.old, col = model$cluster, xlim = c(-1,1),ylim = c(-1,1), pch = model$cluster,main =paste("sampling from the ",counter,"-th normal distribution"))
+  points(model$centers, col = 1:12, pch = 2)
+  text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="dark orange", pos=c(1), offset=-0.16)
+
+  points(df.tmp1$X1[1:num.sample],df.tmp1$X2[1:num.sample],pch = 20,col = alpha(df.tmp1$Col[1:num.sample],0.5))
+  # points(df.tmp1$X1[num.sample:nrow(df.tmp1)],df.tmp1$X2[num.sample:nrow(df.tmp1)],pch = 17,col = 51)
+  # qplot(X1, X2, data=df.tmp1, colour=prob, size=c(rep(1,num.sample),rep(1.5,nrow(df.tmp2))), shape = c(rep(15,num.sample),rep(7,nrow(df.tmp2))), main =paste("Visualizing the normal pdf of cluster#", counter)) + scale_colour_gradient(low="red", high="blue") +
+  #   scale_shape_identity() #+
+  # xlim(-2, 2) + ylim(-2, 2)
+}
+
+for (j in 1:12){
+  plot.cluster(j)
+  # Simulate bivariate normal data
+  mu <- unlist(mean.array[j])    # Mean
+  Sigma <-  matrix(unlist(sigma.array[j]),2,2) # Covariance matrix
+  bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma )  # from Mass package
+  head(bivn)                                      
+  # Calculate kernel density estimate
+  bivn.kde <- kde2d(bivn[,1], bivn[,2], n = 50)
+  image(bivn.kde)       # from base graphics package
+  contour(bivn.kde, add = TRUE)
+}
+```
+
+
+
+Compute the estimator.
+```{r}
+# x.new <- ldply(components,.fun = function(x){sample2(x)})
+x.new <- ldply(
+  components, 
+  .fun = function(x){rmvnorm(1, mean = unlist(mean.array[x]), sigma = matrix(unlist(sigma.array[x]),2,2) )}
+  )
+p.old <- rep(0.5, nrow(x.new))
+# nrow(x.new) equals length(components) equals (n-m)
+
+p.new <- ldply(1:(n-m),.fun=function(x) {gmm.pdf(x.new[x,])})
+# lapply(1:(n-m),function(x)gmm.pdf(x.new[x,]))
+
+v.new <- ldply(1:(n-m), .fun=function(x) v(unlist(x.new[x,])))
+s.new <- ldply(1:(n-m), .fun=function(x) {ifelse(v.new[x,] > zeta,1,0)})
+
+estimator.old <- mean(c(s,s.new[,1]))
+estimator.new <- 1/n * ((sum(s))+(sum(s.new[,1]/p.new[,1]*p.old)))
+hist(p.new[,1],breaks=seq(min(p.new[,1]),max(p.new[,1]),l=35))
+c(estimator.old, estimator.new)
+```
+
+
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).
