@@ -84,11 +84,11 @@ sample.once.importance <- function(n=2000){
       m <- floor (n^(2/3)) # first-stage samples 
       theta <- runif(m, 0, 2 * pi)
       u <- cbind(cos(theta), sin(theta))
-      # plot(u)
+      plot(u)
       
       epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
       x <- u + epsilon
-      # plot(x)
+      plot(x)
       
       x.old <- x
       
@@ -100,9 +100,9 @@ sample.once.importance <- function(n=2000){
       y <-
         unlist(lapply(1:m, function(x)
           v(x.old[x, ]))) # these are the sampled V's.
-      # sum(y == 0)/length(y)   
-      # mean(y) # 1.525384
-      # median(y) # 1.377392
+      sum(y == 0)/length(y)
+      mean(y) # 1.525384
+      median(y) # 1.377392
       
       ## ------------------------------------------------------------------------
       zeta <- 1.35 # this is chosen to be the median of one trial y. Goal is this represents P(Y>zeta)= 0.5.
@@ -110,20 +110,20 @@ sample.once.importance <- function(n=2000){
       
       
       # ## ----plot0---------------------------------------------------------------
-      # color <- ifelse(y > zeta, "blue", "red")
-      # plot(x.old,
-      #      col = color,
-      #      pch = 20,
-      #      main = "First stage samples of x, color by values of y's.")
-      # grid()
-      # legend(
-      #   'bottomright',
-      #   c("y>10", "y<10"),
-      #   pch = 20,
-      #   col = c("blue", "red"),
-      #   bty = 'y',
-      #   cex = .65
-      # )
+      color <- ifelse(y > zeta, "blue", "red")
+      plot(x.old,
+           col = color,
+           pch = 20,
+           main = "First stage samples of x, color by values of y's.")
+      grid()
+      legend(
+        'bottomright',
+        c("y>10", "y<10"),
+        pch = 20,
+        col = c("blue", "red"),
+        bty = 'y',
+        cex = .65
+      )
       # 
       ## ------------------------------------------------------------------------
       size <- floor(sqrt(m))  # number of k-means clusters
@@ -134,30 +134,30 @@ sample.once.importance <- function(n=2000){
         }))
       
       # ## ----plot1--------------------------------------------------------------------
-      # barplot(
-      #   cluster.size.count,
-      #   main = "Size of Clusters",
-      #   xlab = "Cluster index",
-      #   names.arg = 1:size,
-      #   col = "purple"
-      # )
+      barplot(
+        cluster.size.count,
+        main = "Size of Clusters",
+        xlab = "Cluster index",
+        names.arg = 1:size,
+        col = "purple"
+      )
       
       # ## ----plot2---------------------------------------------------------------
-      # plot(x.old,
-      #      col = model$cluster,
-      #      # xlim = c(-1,1),
-      #      # ylim = c(-1,1),
-      #      pch = 20)
-      # # points(model$centers, col = "black", pch = 2)
-      # grid()
-      # text(
-      #   model$centers[, 1],
-      #   model$centers[, 2],
-      #   labels = as.character(1:size),
-      #   col = "black",
-      #   pos = c(1),
-      #   offset = -0.16
-      # )
+      plot(x.old,
+           col = model$cluster,
+           # xlim = c(-1,1),
+           # ylim = c(-1,1),
+           pch = 20)
+      # points(model$centers, col = "black", pch = 2)
+      grid()
+      text(
+        model$centers[, 1],
+        model$centers[, 2],
+        labels = as.character(1:size),
+        col = "black",
+        pos = c(1),
+        offset = -0.16
+      )
       
       ## ------------------------------------------------------------------------
       cluster.prob <-
@@ -166,56 +166,56 @@ sample.once.importance <- function(n=2000){
         }))
       
       # ## ----plot3---------------------------------------------------------------
-      # barplot(
-      #   cluster.prob,
-      #   main = "Proportion of Y>10's in the Clusters",
-      #   xlab = "Cluster index",
-      #   names.arg = 1:size,
-      #   col = "purple"
-      # )
+      barplot(
+        cluster.prob,
+        main = "Proportion of Y>zeta's in the Clusters",
+        xlab = "Cluster index",
+        names.arg = 1:size,
+        col = "purple"
+      )
       
       # ## ----plot4---------------------------------------------------------------
-      # pos.prob <- which(cluster.prob > 0)
-      # colors.grayscale <-
-      #   paste("gray", floor((1 - cluster.prob) * 100), sep = "")
-      # plot(
-      #   x.old[which(model$cluster == pos.prob[1]), ],
-      #   col = colors.grayscale[1],
-      #   bg = colors.grayscale[1],
-      #   xlim = c(-1.5, 1.5),
-      #   ylim = c(-1.5, 1.5),
-      #   main = "Clusters and Their Respective Probabilities",
-      #   xlab = "x_1",
-      #   ylab = "x_2",
-      #   pch = 20
-      # )
-      # grid()
-      # for (i in 2:size) {
-      #   points(x.old[which(model$cluster == i), ],
-      #          col = colors.grayscale[i],
-      #          bg = colors.grayscale[i],
-      #          pch = 20)
-      # }
-      # text(
-      #   model$centers[, 1],
-      #   model$centers[, 2],
-      #   labels = paste(
-      #     paste("#", as.character(1:size), ":", sep = ""),
-      #     paste(floor(cluster.prob * 100), rep("%", size), sep = ""),
-      #     sep = " "
-      #   ),
-      #   col = "red",
-      #   pos = c(1),
-      #   offset = -0.16
-      # )
-      # # text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="red", pos=c(1), offset=-0.16)
-      # # text(model$centers[,1],
-      # #      model$centers[,2],
-      # #      labels=paste(floor(cluster.prob*100), rep("%", size), sep = ""),
-      # #      col="red",
-      # #      pos=c(4),
-      # #      offset=1)
-      # 
+      pos.prob <- which(cluster.prob > 0)
+      colors.grayscale <-
+        paste("gray", floor((1 - cluster.prob) * 100), sep = "")
+      plot(
+        x.old[which(model$cluster == pos.prob[1]), ],
+        col = colors.grayscale[1],
+        bg = colors.grayscale[1],
+        xlim = c(-1.5, 1.5),
+        ylim = c(-1.5, 1.5),
+        main = "Clusters and Their Respective Probabilities",
+        xlab = "x_1",
+        ylab = "x_2",
+        pch = 20
+      )
+      grid()
+      for (i in 2:size) {
+        points(x.old[which(model$cluster == i), ],
+               col = colors.grayscale[i],
+               bg = colors.grayscale[i],
+               pch = 20)
+      }
+      text(
+        model$centers[, 1],
+        model$centers[, 2],
+        labels = paste(
+          paste("#", as.character(1:size), ":", sep = ""),
+          paste(floor(cluster.prob * 100), rep("%", size), sep = ""),
+          sep = " "
+        ),
+        col = "red",
+        pos = c(1),
+        offset = -0.16
+      )
+      # text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="red", pos=c(1), offset=-0.16)
+      # text(model$centers[,1],
+      #      model$centers[,2],
+      #      labels=paste(floor(cluster.prob*100), rep("%", size), sep = ""),
+      #      col="red",
+      #      pos=c(4),
+      #      offset=1)
+
       
       ## ------------------------------------------------------------------------
       df <- data.frame(model$centers)
@@ -240,14 +240,14 @@ sample.once.importance <- function(n=2000){
         }))
       # sum(cluster.size.percentage) # = 1
       
-      # ## ----plot5--------------------------------------------------------------------
-      # barplot(
-      #   cluster.size.percentage,
-      #   main = "Probability of Clusters",
-      #   xlab = "Cluster index",
-      #   names.arg = 1:size,
-      #   col = "purple"
-      # )
+      ## ----plot5--------------------------------------------------------------------
+      barplot(
+        cluster.size.percentage,
+        main = "Probability of Clusters",
+        xlab = "Cluster index",
+        names.arg = 1:size,
+        col = "purple"
+      )
       
       ## ------------------------------------------------------------------------
       components <- 
@@ -290,55 +290,55 @@ sample.once.importance <- function(n=2000){
       #         )
       #   )
       # }
-      
-      # ## ----plot7.visualize.gmm--------------------------------------------------------------------
-      # plot.cluster <- function(counter){ # counter indicate cluster indices
-      #
-      #   num.sample <- 300 # sample 300 times from each normal.
-      #
-      #   this.cluster.points <- rmvnorm(
-      #     num.sample, mean = unlist(mean.array[counter]),
-      #     sigma = matrix(unlist(sigma.array[counter]),2,2)
-      #     ) # generate points from the normal
-      #
-      #   df.tmp1 <- data.frame(this.cluster.points) # save the generated points in a data frame
-      #
-      #   df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),2,2)))) # compute the pdf of the normal at each sampled point
-      #
-      #   df.tmp2 <- data.frame(cbind(x.old[which(model$cluster==counter),],0)) # obtain the sampled points belonging to this cluster from stage-one sampling
-      #
-      #   names(df.tmp2) <- names(df.tmp1)
-      #   df.tmp1 <- rbind(df.tmp1, df.tmp2) # combine the two temporary data frames
-      #
-      #   rbPal <- colorRampPalette(c('red','blue')) # specify color scale.
-      #
-      #   df.tmp1$Col <- rbPal(nrow(df.tmp1))[as.numeric(cut(df.tmp1$prob, breaks = nrow(df.tmp1)))] # adds a column of color values based on the y values.
-      #
-      #   plot(x.old,
-      #        col = model$cluster,
-      #        xlim = c(-1.2, 1.2),
-      #        ylim = c(-1.2, 1.2),
-      #        pch = model$cluster,
-      #        main = paste("Sampling from Normal Distribution #", counter))
-      #   grid()
-      #   points(model$centers, col = 1:size, pch = 2)
-      #   text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="dark orange", pos=c(1), offset=-0.16)
-      #
-      #   points(df.tmp1$X1[1:num.sample],df.tmp1$X2[1:num.sample],pch = 20,col = alpha(df.tmp1$Col[1:num.sample],0.5))
-      # }
-      #
-      # for (j in 1:size){
-      #   plot.cluster(j)
-      #   # Simulate bivariate normal data, using code from http://blog.revolutionanalytics.com/2016/02/multivariate_data_with_r.html
-      #   mu <- unlist(mean.array[j])  # Mean
-      #   Sigma <-  matrix(unlist(sigma.array[j]),2,2) # Covariance matrix
-      #   bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma )  # from Mass package
-      #   head(bivn)
-      #   # Calculate kernel density estimate
-      #   bivn.kde <- kde2d(bivn[,1], bivn[,2], n = 50)
-      #   image(bivn.kde) # from base graphics package
-      #   contour(bivn.kde, add = TRUE)
-      # }
+
+      ## ----plot7.visualize.gmm--------------------------------------------------------------------
+      plot.cluster <- function(counter){ # counter indicate cluster indices
+
+        num.sample <- 300 # sample 300 times from each normal.
+
+        this.cluster.points <- rmvnorm(
+          num.sample, mean = unlist(mean.array[counter]),
+          sigma = matrix(unlist(sigma.array[counter]),2,2)
+          ) # generate points from the normal
+
+        df.tmp1 <- data.frame(this.cluster.points) # save the generated points in a data frame
+
+        df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),2,2)))) # compute the pdf of the normal at each sampled point
+
+        df.tmp2 <- data.frame(cbind(x.old[which(model$cluster==counter),],0)) # obtain the sampled points belonging to this cluster from stage-one sampling
+
+        names(df.tmp2) <- names(df.tmp1)
+        df.tmp1 <- rbind(df.tmp1, df.tmp2) # combine the two temporary data frames
+
+        rbPal <- colorRampPalette(c('red','blue')) # specify color scale.
+
+        df.tmp1$Col <- rbPal(nrow(df.tmp1))[as.numeric(cut(df.tmp1$prob, breaks = nrow(df.tmp1)))] # adds a column of color values based on the y values.
+
+        plot(x.old,
+             col = model$cluster,
+             xlim = c(-1.2, 1.2),
+             ylim = c(-1.2, 1.2),
+             pch = model$cluster,
+             main = paste("Sampling from Normal Distribution #", counter))
+        grid()
+        points(model$centers, col = 1:size, pch = 2)
+        text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="dark orange", pos=c(1), offset=-0.16)
+
+        points(df.tmp1$X1[1:num.sample],df.tmp1$X2[1:num.sample],pch = 20,col = alpha(df.tmp1$Col[1:num.sample],0.5))
+      }
+
+      for (j in 1:size){
+        plot.cluster(j)
+        # Simulate bivariate normal data, using code from http://blog.revolutionanalytics.com/2016/02/multivariate_data_with_r.html
+        mu <- unlist(mean.array[j])  # Mean
+        Sigma <-  matrix(unlist(sigma.array[j]),2,2) # Covariance matrix
+        bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma )  # from Mass package
+        head(bivn)
+        # Calculate kernel density estimate
+        bivn.kde <- kde2d(bivn[,1], bivn[,2], n = 50)
+        image(bivn.kde) # from base graphics package
+        contour(bivn.kde, add = TRUE)
+      }
       
       
       ## ------------------------------------------------------------------------
@@ -359,6 +359,8 @@ sample.once.importance <- function(n=2000){
                   Sigma = sigma.array[[x]])
         }
       )
+      plot(x.new)
+      
       # y.new <- ldply(
       #     1:nrow(x.new),
       #     .fun = function(x)
@@ -453,19 +455,19 @@ var(results8000) * 8000
 
 df.tmp <- results1000.is
 var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] # 0.002162626
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 1000  # 2.162626
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 1000 # 2.162626
 
 df.tmp <- results2000.is
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] # 0.002162626
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 2000 # 4.325252
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] #  0.001021574
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 2000 # 2.043148
 
 df.tmp <- results4000.is
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] # 0.002162626
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 4000 # 8.650504
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] # 0.0005297752
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 4000 # 2.119101
 
 df.tmp <- results8000.is
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] # 0.002162626
-var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 8000 # 17.30101
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] # 0.0002019861
+var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 8000 # 1.615889
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
 
@@ -497,9 +499,9 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 plot(1:nrow(df.tmp), 
      mse.tmp[,1], 
      type = "l", 
-     col = "red",
+     col = "firebrick",
      lty = "solid",
-     main = "MSE with n = 2000", 
+     main = "MSE with n = 1000, 2000, 4000, 8000", 
      xlab = "Number of Simulations",
      ylab = "MSE")
 df.tmp <- rbind(results2000,results2000.1)
@@ -508,25 +510,24 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
      mse.tmp[,1], 
      type = "l", 
-     col = "orange",
-     lty = "dotdash")
+     col = "aquamarine4",
+     lty = "solid")
 df.tmp <- rbind(results4000,results4000.1)
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
 mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "black",
-      lty = "dashed")
+      col = "darkorange3",
+      lty = "solid")
 df.tmp <- rbind(results8000,results8000.1)
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
 mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "purple",
-      lty = "longdash")
-
+      col = "blue4",
+      lty = "solid")
 
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
@@ -584,11 +585,11 @@ df.tmp <- results1000.naive
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
 # df.tmp <- data.frame(df.tmp[1:1000,1])
 mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
-plot(1:nrow(df.tmp), 
+lines(1:nrow(df.tmp), 
      mse.tmp[,1], 
      type = "l", 
-     col = "red",
-     lty = "solid",
+     col = "firebrick1",
+     lty = "dotted",
      main = "MSE with n = 2000", 
      xlab = "Number of Simulations",
      ylab = "MSE")
@@ -598,24 +599,24 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "orange",
-      lty = "dotdash")
+      col = "aquamarine3",
+      lty = "dotted")
 df.tmp <- results4000.naive
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
 mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "black",
-      lty = "dashed")
+      col = "orange",
+      lty = "dotted")
 df.tmp <- results8000.naive
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
 mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "purple",
-      lty = "longdash")
+      col = "blue",
+      lty = "dotted")
 
 ## --------------------SCARTCH FOLLOWS-------------------------------------
 ## ------------------------------------------------------------------------
