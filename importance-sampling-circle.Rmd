@@ -998,7 +998,7 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "darkorange3",
+      col = "darkorchid4",
       lty = "solid")
 df.tmp <- rbind(results8000,results8000.1)
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
@@ -1006,15 +1006,19 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "blue4",
+      col = "darkgoldenrod3",
       lty = "solid")
 grid()
 legend('topright', 
+       bg="transparent",
        c("n=1000", "n=2000", "n=4000", "n=8000"), 
        lty = c("solid"),
-       col = c("firebrick", "aquamarine4", "darkorange3", "blue4"), 
+       col = c("firebrick", "aquamarine4", "darkorchid4", "darkgoldenrod3"), 
        bty = 'y', 
-       cex = 0.6)
+       lwd = 2,
+       title = "Importance Sampling",
+       title.col = "black",
+       cex = 0.5)
 
 df.tmp <- results1000.naive
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
@@ -1033,7 +1037,7 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "aquamarine3",
+      col = "mediumaquamarine",
       lty = "dotted")
 df.tmp <- results4000.naive
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
@@ -1041,7 +1045,7 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "orange",
+      col = "darkorchid1",
       lty = "dotted")
 df.tmp <- results8000.naive
 df.tmp <- data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1])
@@ -1049,15 +1053,18 @@ mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)}
 lines(1:nrow(df.tmp), 
       mse.tmp[,1], 
       type = "l", 
-      col = "blue",
+      col = "darkgoldenrod1",
       lty = "dotted")
 legend('topleft', 
        bg="transparent",
        c("n=1000", "n=2000", "n=4000", "n=8000"), 
        lty = c("dotted"),
-       col = c("firebrick1", "aquamarine3", "orange", "blue"), 
+       col = c("firebrick1", "mediumaquamarine", "darkorchid1", "darkgoldenrod1"), 
        bty = 'y', 
-       cex = 0.6)
+       lwd = 2,
+       title = "Naive Sampling",
+       title.col = "black",
+       cex = 0.5)
 ```
 
 We see that the MSE for each fixed $n$ roughly approaches a horizontal asymptote. As $n$ increases, the limiting MSE decreases.
@@ -1086,4 +1093,4 @@ var(data.frame(df.tmp[which(df.tmp>0 & df.tmp<0.9),1]))[1] * 8000 # 1.615889
 
 ## Future work
 
-We end the notebook here. In the next note, we will focus on visualizing the spread of the estimators given in this note. 
+We end the notebook here. In the next note, we will focus on visualizing the spread of the estimators given in this note. We will also add more dummy dimensions to the natural distribution and see how that affects the two estimators.
