@@ -1,5 +1,5 @@
 ---
-title: "Importance Sampling for Stochastic Simulation on a Noisy Circle"
+title: "Importance Sampling for Stochastic Simulation on a Noisy Circle, \n with Two Noise Dimensions"
 output:
   html_document: default
   html_notebook: default
