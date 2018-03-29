@@ -5,6 +5,30 @@ library(MASS)
 library(ggplot2)
 library(mvtnorm)
 
+circle.density <- function(x.tmp = c(0,0), n.cut = 100){
+  theta.tmp <- seq(0, 2*pi, by = 2*pi/n.cut)   
+  u.tmp <- cbind(cos(theta.tmp), sin(theta.tmp))
+  d.tmp <- sum(unlist(lapply(1:nrow(u.tmp), function(x){dmvnorm(x.tmp, mean = u.tmp[x,], sigma = 0.01 * diag(2))})))/n.cut
+  return(d.tmp)
+}
+
+
+circle.density.df <- function(x.tmp = c(0,0), n.cut = 100){
+  theta.tmp <- seq(0, 2*pi, length.out = n.cut + 1)   
+  u.tmp <- cbind(cos(theta.tmp), sin(theta.tmp))
+  d.tmp <- dmvnorm(x.tmp, u.tmp[1,], 0.01 * diag(2))
+  for (j in 2:n.cut){
+    d.tmp <- d.tmp + dmvnorm(x.tmp, u.tmp[j,], 0.01 * diag(2))
+  }
+  d.tmp <- d.tmp / n.cut
+  return(d.tmp)
+}
+
+# z1 <- mvrnorm(m, mu = c( 0), Sigma = 0.01 * diag(1))
+# z2 <- mvrnorm(m, mu = c( 0), Sigma = 0.01 * diag(1))
+# z1.prob <- dmvnorm(cbind(z1), c(0), 0.01 * diag(1))
+# z2.prob <- dmvnorm(cbind(z2), c(0), 0.01 * diag(1))
+# z.prob <- dmvnorm(cbind(z1,z2), c(0,0), 0.01 * diag(2))
 
 n <- 2000
 m <- floor (n^(2/3)) # first-stage samples 
@@ -15,6 +39,7 @@ plot(u)
 epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
 x <- u + epsilon
 plot(x)
+x <- cbind(x,  mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2)))
 
 x.old <- x
 
@@ -68,8 +93,52 @@ barplot(
   col = "purple"
 )
 
+# ## ----plot2.0---------------------------------------------------------------
+
+plot(data.frame(x.old),
+     col = model$cluster,
+     # xlim = c(-1,1),
+     # ylim = c(-1,1),
+     pch = 20)
+
+
 # ## ----plot2---------------------------------------------------------------
+
 plot(x.old,
+     col = model$cluster,
+     # xlim = c(-1,1),
+     # ylim = c(-1,1),
+     pch = 20)
+# points(model$centers, col = "black", pch = 2)
+grid()
+text(
+  model$centers[, 1],
+  model$centers[, 2],
+  labels = as.character(1:size),
+  col = "black",
+  pos = c(1),
+  offset = -0.16
+)
+
+# NOTE: THESE SHOULD LOOK MORE OR LESS UNIFORMLY DISTRIBUTED
+plot(x.old[,2:3],
+     col = model$cluster,
+     # xlim = c(-1,1),
+     # ylim = c(-1,1),
+     pch = 20)
+# points(model$centers, col = "black", pch = 2)
+grid()
+text(
+  model$centers[, 1],
+  model$centers[, 2],
+  labels = as.character(1:size),
+  col = "black",
+  pos = c(1),
+  offset = -0.16
+)
+
+# NOTE: THESE SHOULD LOOK MORE OR LESS UNIFORMLY DISTRIBUTED
+plot(x.old[,3:4],
      col = model$cluster,
      # xlim = c(-1,1),
      # ylim = c(-1,1),
@@ -145,13 +214,13 @@ text(
 
 ## ------------------------------------------------------------------------
 df <- data.frame(model$centers)
-names(df) <- c("centers.old1", "centers.old2")
+# names(df) <- c("centers.old1", "centers.old2")
 df$prob <- cluster.prob
 # centers.new <- matrix(unlist(lapply(1:size,function(x){colMeans(x.old[which(model$cluster == x),])})),,2)
 # df$centers.new1 <- centers.new[,1]
 # df$centers.new2 <- centers.new[,2]
-df$centers.new2 <- df$centers.old2
-df$centers.new1 <- df$centers.old1
+# df$centers.new2 <- df$centers.old2
+# df$centers.new1 <- df$centers.old1
 # df
 
 ## ------------------------------------------------------------------------
@@ -199,7 +268,7 @@ components <-
 
 ## ------------------------------------------------------------------------
 sigma.array <- lapply(1:size, function(x) unlist(sigma.new(x)))
-mean.array <- lapply(1:size, function(x) cbind(df$centers.new1, df$centers.new2)[x, ])
+mean.array <- lapply(1:size, function(x) df[,1:4][x, ])
 df$sigma <- sigma.array
 # df
 
@@ -224,12 +293,13 @@ plot.cluster <- function(counter){ # counter indicate cluster indices
   
   this.cluster.points <- rmvnorm(
     num.sample, mean = unlist(mean.array[counter]),
-    sigma = matrix(unlist(sigma.array[counter]),2,2)
+    sigma = matrix(unlist(sigma.array[counter]),4,4) # CRQ: updated this
   ) # generate points from the normal
   
   df.tmp1 <- data.frame(this.cluster.points) # save the generated points in a data frame
   
-  df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),2,2)))) # compute the pdf of the normal at each sampled point
+  df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),4,4)))) # compute the pdf of the normal at each sampled point
+  # CRQ: updated this
   
   df.tmp2 <- data.frame(cbind(x.old[which(model$cluster==counter),],0)) # obtain the sampled points belonging to this cluster from stage-one sampling
   
@@ -257,8 +327,8 @@ for (j in 1:size){
   plot.cluster(j)
   # Simulate bivariate normal data, using code from http://blog.revolutionanalytics.com/2016/02/multivariate_data_with_r.html
   mu <- unlist(mean.array[j])  # Mean
-  Sigma <-  matrix(unlist(sigma.array[j]),2,2) # Covariance matrix
-  bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma )  # from Mass package
+  Sigma <-  matrix(unlist(sigma.array[j]),4,4) # Covariance matrix # CRQ: updated this
+  bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma)  # from Mass package
   head(bivn)
   # Calculate kernel density estimate
   bivn.kde <- kde2d(bivn[,1], bivn[,2], n = 50)
@@ -281,7 +351,7 @@ x.new <- ldply(
   components,
   .fun = function(x) {
     mvrnorm(1,
-            mu = mean.array[[x]],
+            mu = unlist(mean.array[[x]]),
             Sigma = sigma.array[[x]])
   }
 )
@@ -320,10 +390,12 @@ s.new <- ldply(
 # )))
 
 ## ------------------------------------------------------------------------
-p.old <- circle.density.df(as.matrix(x.new))
-p.new <- cluster.size.percentage[1] * dmvnorm(x.new, mean.array[[1]], sigma.array[[1]])
+p.old <- circle.density.df(as.matrix(x.new[,1:2]))
+p.old <- p.old * dmvnorm(x.new[,3:4], c(0,0), 0.01 * diag(2))
+
+p.new <- cluster.size.percentage[1] * dmvnorm(x.new, unlist(mean.array[[1]]), sigma.array[[1]])
 for (j in 2:size) {
-  p.new <- p.new + cluster.size.percentage[j] * dmvnorm(x.new, mean.array[[j]], sigma.array[[j]])
+  p.new <- p.new + cluster.size.percentage[j] * dmvnorm(x.new, unlist(mean.array[[j]]), sigma.array[[j]])
 }
 
 # ## ----plot9--------------------------------------------------------------------
