@@ -857,26 +857,38 @@ sample.once.importance <- function(n=2000){
   return(out)
 }
 
-results1000 <- ldply(1:1000, .fun = function(x){sample.once.importance(1000)})
-mean(results1000[results1000<1 & results1000>0,1])
+# results1000 <- ldply(1:1000, .fun = function(x){sample.once.importance(1000)})
+# mean(results1000[results1000<1 & results1000>0,1])
+# results2000 <- ldply(1:1000, .fun = function(x){sample.once.importance(2000)})
+# mean(results2000[results2000<1 & results2000>0,1])
 
-
-results2000 <- ldply(1:1000, .fun = function(x){sample.once.importance(2000)})
-mean(results2000[results2000<1 & results2000>0,1])
-
-
+results1000 <- sample.once.importance(1000)
+results2000 <- sample.once.importance(2000)
 results4000 <- sample.once.importance(4000)
-for (tmp.counter in 2:1000){
-  results4000 <- c(results4000, sample.once.importance(4000))
-}
-mean(results4000[results4000<1 & results4000>0])
-
-
 results8000 <- sample.once.importance(8000)
-for (tmp.counter in 2:1000){
+
+for (tmp.counter in 1:9000){
+  results1000 <- c(results1000, sample.once.importance(1000))
+  results2000 <- c(results2000, sample.once.importance(2000))
+  results4000 <- c(results4000, sample.once.importance(4000))
   results8000 <- c(results8000, sample.once.importance(8000))
+  results1000.naive <- c(results1000.naive, sample.once.naive(1000))
+  results2000.naive <- c(results2000.naive, sample.once.naive(2000))
+  results4000.naive <- c(results4000.naive, sample.once.naive(4000))
+  results8000.naive <- c(results8000.naive, sample.once.naive(8000))
 }
+results1000 <- matrix(unlist(results1000), ncol = 1)[,1]
+results2000 <- matrix(unlist(results2000), ncol = 1)[,1]
+
+mean(results4000[results4000<1 & results4000>0])
 mean(results8000[results8000<1 & results8000>0])
+
+results16000 <- sample.once.importance(16000)
+results16000.naive <- sample.once.naive(16000)
+for (tmp.counter in 1:5000){
+  results16000 <- c(results16000, sample.once.importance(16000))
+  results16000.naive <- c(results16000.naive, sample.once.naive(16000))
+}
 
 
 ## ------------------------------------------------------------------------
@@ -911,32 +923,138 @@ sample.once.naive <- function(n=2000){
 }
 
 results1000.naive <- sample.once.naive(1000)
-for (tmp.counter in 2:1000){
-  results1000.naive <- c(results1000.naive, sample.once.naive(1000))
-}
-
 results2000.naive <- sample.once.naive(2000)
-for (tmp.counter in 2:1000){
-  results2000.naive <- c(results2000.naive, sample.once.naive(2000))
-}
-
 results4000.naive <- sample.once.naive(4000)
-for (tmp.counter in 2:1000){
-  results4000.naive <- c(results4000.naive, sample.once.naive(4000))
-}
-
 results8000.naive <- sample.once.naive(8000)
-for (tmp.counter in 2:1000){
+
+for (tmp.counter in 1:9000){
+  results1000.naive <- c(results1000.naive, sample.once.naive(1000))
+  results2000.naive <- c(results2000.naive, sample.once.naive(2000))
+  results4000.naive <- c(results4000.naive, sample.once.naive(4000))
   results8000.naive <- c(results8000.naive, sample.once.naive(8000))
 }
 
 
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
+
+df.tmp <- data.frame(results8000[results8000<1 & results8000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+plot(1:nrow(df.tmp), 
+     mse.tmp[,1], 
+     type = "l", 
+     col = "firebrick",
+     lty = "solid",
+     main = "MSE with Different Numbers of Samples", 
+     xlab = "Number of Simulations",
+     ylab = "MSE")
+
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
+
+df.tmp <- data.frame(results1000[results1000<1 & results1000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+plot(1:nrow(df.tmp), 
+     mse.tmp[,1], 
+     type = "l", 
+     col = "firebrick",
+     lty = "solid",
+     main = "MSE with Different Numbers of Samples", 
+     xlab = "Number of Simulations",
+     ylab = "MSE")
+df.tmp <- data.frame(results2000[results2000<1 & results2000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "aquamarine4",
+      lty = "solid")
+df.tmp <- data.frame(results4000[results4000<1 & results4000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkorchid4",
+      lty = "solid")
+df.tmp <- data.frame(results8000[results8000<1 & results8000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkgoldenrod3",
+      lty = "solid")
+grid()
+legend('topright', 
+       bg="transparent",
+       c("n=1000", "n=2000", "n=4000", "n=8000"), 
+       lty = c("solid"),
+       col = c("firebrick", "aquamarine4", "darkorchid4", "darkgoldenrod3"), 
+       bty = 'y', 
+       lwd = 2,
+       title = "Importance Sampling",
+       title.col = "black",
+       cex = 0.5)
+
+df.tmp <- data.frame(results1000.naive[results1000.naive<1 & results1000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "firebrick1",
+      lty = "dotted",
+      main = "MSE with n = 2000", 
+      xlab = "Number of Simulations",
+      ylab = "MSE")
+df.tmp <- data.frame(results2000.naive[results2000.naive<1 & results2000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "mediumaquamarine",
+      lty = "dotted")
+df.tmp <- data.frame(results4000.naive[results4000.naive<1 & results4000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkorchid1",
+      lty = "dotted")
+df.tmp <- data.frame(results8000.naive[results8000.naive<1 & results8000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkgoldenrod1",
+      lty = "dotted")
+legend('topleft', 
+       bg="transparent",
+       c("n=1000", "n=2000", "n=4000", "n=8000"), 
+       lty = c("dotted"),
+       col = c("firebrick1", "mediumaquamarine", "darkorchid1", "darkgoldenrod1"), 
+       bty = 'y', 
+       lwd = 2,
+       title = "Naive Sampling",
+       title.col = "black",
+       cex = 0.5)
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
+
+
+df.tmp <- data.frame(results16000.naive[results16000.naive<1 & results16000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+plot(1:nrow(df.tmp), 
+     mse.tmp[,1], 
+     type = "l", 
+     col = "darkgoldenrod1",
+     lty = "dotted")
+df.tmp <- data.frame(results16000[results16000<1 & results16000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkgoldenrod1",
+      lty = "dotted")
+
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
 ## ------------------------------------------------------------------------
