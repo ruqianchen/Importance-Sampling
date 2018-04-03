@@ -16,7 +16,7 @@ u&=(\cos(\theta),\sin(\theta), 0, 0),\\
 u&\perp \epsilon.
 \end{align}
 
-## Utility Functions and Packages
+## Packages and Auxilary Functions
 
 ```{r, message=FALSE, warning=FALSE}
 library(distr)
@@ -25,6 +25,7 @@ library(mclust)
 library(MASS)
 library(ggplot2)
 library(mvtnorm)
+library(fields)
 
 circle.density <- function(x.tmp = c(0,0), n.cut = 100){
   theta.tmp <- seq(0, 2*pi, by = 2*pi/n.cut)   
@@ -46,8 +47,512 @@ circle.density.df <- function(x.tmp = c(0,0), n.cut = 100){
 }
 ```
 
-## The Importance Sampling Algorithm
-We dive right into the algorithm. More details on the algorithm are provided in [the earlier note](https://ruqianchen.github.io/importance-sampling-circle.html).
+## The Naive Estimator
+
+```{r}
+sample.once.naive <- function(n=2000){
+  m <- n
+  ## ------------------------------------------------------------------------
+  zeta <- 1.35
+  m <- floor (n^(2/3)) # first-stage samples 
+  theta <- runif(m, 0, 2 * pi)
+  u <- cbind(cos(theta), sin(theta))
+  epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
+  x <- u + epsilon
+  x.old <- x
+  
+  v <- function(x) {
+    return(rnorm(1, exp(x[1] + x[2]), 1))
+  }
+  
+  ## ------------------------------------------------------------------------
+  y <- unlist(lapply(1:m, function(x) v(x.old[x,]))) # these are the sampled V's. 
+  
+  ## ------------------------------------------------------------------------
+  s <- ifelse(y>zeta, 1, 0)
+  return(mean(s))
+}
+```
+
+## The Importance Sampling Estimator with Visualization
+
+This is a similar set of visualizations / diagnosis plots as in [the earlier note](https://ruqianchen.github.io/importance-sampling-circle.html). Here the cutoff $\zeta$ is still fixed at $1.35$. We set up a function to sample from the family of distributions $Y|X=x$ for varying $x$'s.
+
+```{r define y and zeta}
+zeta <- 1.35 # this is chosen to be the median of one trial y. Goal is this represents P(Y>zeta)= 0.5.
+v <- function(x) {
+    return(rnorm(1, exp(x[1] + x[2]), 1)) 
+}
+```
+
+### Define sampling distributions.
+
+We will perform two stages of sampling. We set the total number $n$ of samples to be $2000$. We set the first stage number $m$ of samples to be $\sqrt{n^{2/3}}\approx 158$. 
+
+```{r}
+n <- 2000 # total samples
+m <- floor (n^(2/3)) # first-stage samples, m = 158
+```
+
+### First-stage Sampling
+We sample $m=158$ many $X$ from the natural distribution in the following steps.
+
+We first sample points uniformly on a circle.
+
+```{r}
+theta <- runif(m, 0, 2 * pi)
+u <- cbind(cos(theta), sin(theta))
+## ----plot u--------------------------------------------------------------------
+plot(u, main = "Sampled Points on the Unit Circle", col = "purple", pch = 20)
+grid()
+```
+
+We then add noise to the points on the unit circle.
+
+```{r}
+epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
+x <- u + epsilon
+## ----plot x--------------------------------------------------------------------
+plot(x, main = "Sampled Noisy x's", col = "purple", pch = 20)
+grid()
+```
+
+We add two dummy dimensions.
+
+```{r}
+x <- cbind(x,  mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2)))
+x.old <- x
+```
+
+For each sampled $x$, we sample a $v$ from the distribution defined above. We compute the mean and median of $y$'s. We note that the median is close to $\zeta$.
+
+
+```{r}
+y <-
+  unlist(lapply(1:m, function(x)
+    v(x.old[x, ]))) # these are the sampled V's.
+sum(y == 0)/length(y)
+mean(y)  
+median(y) # close to the zeta = 1.35
+```
+
+We define a vector $s$ where $s_j = 1$ if $y_j>\zeta$ and $s_j=0$ otherwise.
+
+```{r}
+s <- ifelse(y > zeta, 1, 0)
+```
+
+We visualize the $Y$'s in the following plot. 
+
+Below are the $m$ many sampled $x$'s projected onto the two structural dimensions. A point is colored blue when $y>\zeta=1.35$ and colored red when $y\leq \zeta$.
+
+Recall that $Y|X=x$ is a one-dimensional normal distribution with mean $\exp(x_1+x_2)$ and variance $1$. Therefore we expect to see mostly blue points in regions where $|x_1+x_2|$ is large, e.g. the first quadrant. We expect to see mostly red points inn regions where  $|x_1+x_2|$ is small, e.g. the third quadrant. 
+
+```{r}
+## ----plot0---------------------------------------------------------------
+color <- ifelse(y > zeta, "blue", "red")
+plot(x.old,
+     col = color,
+     pch = 20,
+     main = "First stage samples of x, color by values of y's.")
+grid()
+legend(
+  'bottomright',
+  c("y>10", "y<10"),
+  pch = 20,
+  col = c("blue", "red"),
+  bty = 'y',
+  cex = .65
+)
+```
+
+We plot the noise dimensions along with the structural dimenions. Notice that the above graph is shown as the top left subplots below.
+
+We expect to see half red and half blue in dimensions involving $x_3$ and $x_4$.
+
+```{r}
+## ----plot0---------------------------------------------------------------
+color <- ifelse(y > zeta, "blue", "red")
+plot(data.frame(x.old),
+     col = color,
+     pch = 20,
+     main = "First stage samples of x, color by values of y's.")
+grid()
+legend(
+  'bottomright',
+  c("y>10", "y<10"),
+  pch = 20,
+  col = c("blue", "red"),
+  bty = 'y',
+  cex = .65
+)
+```
+
+### K-means clustering
+
+We perform k-means clustering on the $x$'s where $k$ is chosen to be $\sqrt{m}$. We examine the size of of each cluster. Because $x$'s are sampled from a noisy unit circle that is roughly evenly spread apart, we expect the cluster sizes to be similar.
+
+We observe that the sizes of clusters are indeed more or less spread evenly with no cluster with extremely large or small size.
+
+```{r}
+size <- floor(sqrt(m))  # number of k-means clusters
+model <- kmeans(x.old, size)
+cluster.size.count <-
+  unlist(lapply(1:size, function(x) {
+    length(which(model$cluster == x))
+  }))
+      
+## ----plot the size of clusters--------------------------------------------------------------------
+barplot(
+  cluster.size.count,
+  main = "Size of Clusters",
+  xlab = "Cluster index",
+  names.arg = 1:size,
+  col = "purple"
+)
+```
+
+We plot the points $x$'s, colored according to which clusters they belong to. The numbers indicate cluster indices. The positions of the numbers are the cluster centers.
+
+First, structural dimension.
+
+```{r}
+## ----plot2---------------------------------------------------------------
+
+plot(x.old,
+     col = model$cluster,
+     # xlim = c(-1,1),
+     # ylim = c(-1,1),
+     pch = 20)
+# points(model$centers, col = "black", pch = 2)
+grid()
+text(
+  model$centers[, 1],
+  model$centers[, 2],
+  labels = as.character(1:size),
+  col = "black",
+  pos = c(1),
+  offset = -0.16
+)
+
+```
+
+Second, all dimensions.
+
+```{r}
+## ----plot2.0---------------------------------------------------------------
+
+plot(data.frame(x.old),
+     col = model$cluster,
+     # xlim = c(-1,1),
+     # ylim = c(-1,1),
+     pch = 20)
+```
+
+For each cluster, we compute the proportion of $x$'s whose  corresponding $y$'s are greater than $\zeta$. We call this the "cluster probability". We expect higher probabilities from the clusters in regions where $|x_1+x_2|$ is large, e.g. the first quadrant. We expect lower probabilities from the clusters in regions where $|x_1+x_2|$ is small, e.g. the third quadrant. 
+
+
+```{r}
+cluster.prob <-
+  unlist(lapply(1:nrow(model$centers), function(x) {
+    mean(s[which(model$cluster == x)])
+  }))
+      
+## ----plot---------------------------------------------------------------
+barplot(
+  cluster.prob,
+  main = "Proportion of Y>zeta's in the Clusters",
+  xlab = "Cluster index",
+  names.arg = 1:size,
+  col = "purple"
+)
+```
+
+We visualize the probabilities of the clusters in the following scatterplot. As expected, the clusters in the first quadrant have probabilities close to $100%$, while those in the third quadrant have probabilities close to $0%$. 
+
+We use a grayscale to color the probabilities, with black indicating $100%$ and white indicating $0%$. The probabilities are 
+
+```{r}
+paste(
+    paste("#", as.character(1:size), ":", sep = ""),
+    paste(floor(cluster.prob * 100), rep("%", size), sep = ""),
+    sep = " "
+)
+```
+
+
+```{r}
+pos.prob <- which(cluster.prob > 0)
+colors.grayscale <-
+  paste("gray", floor((1 - cluster.prob) * 100), sep = "")
+plot(
+  x.old[which(model$cluster == pos.prob[1]), ],
+  col = colors.grayscale[1],
+  bg = colors.grayscale[1],
+  xlim = c(-1.5, 1.5),
+  ylim = c(-1.5, 1.5),
+  main = "Clusters and Their Respective Probabilities",
+  xlab = "x_1",
+  ylab = "x_2",
+  pch = 20
+)
+grid()
+for (i in 2:size) {
+  points(x.old[which(model$cluster == i), ],
+         col = colors.grayscale[i],
+         bg = colors.grayscale[i],
+         pch = 20)
+}
+for (i in 1:size) {
+  points(x.old[which(model$cluster == i), ], col = "purple")
+}
+text(
+  model$centers[, 1],
+  model$centers[, 2],
+  labels = paste(
+    paste("#", as.character(1:size), ":", sep = ""),
+    paste(floor(cluster.prob * 100), rep("%", size), sep = ""),
+    sep = " "
+  ),
+  col = "red",
+  pos = c(1),
+  offset = -0.16,
+  font = 2
+)
+```
+
+
+
+### Store Information
+
+We prepare a data frame to store the information we have obtained so far. Note that here instead of using old cluster centers, we can update any cluster center to be the mean of the points belonging to  that cluster. However, for convenience, we stick with the old cluster centers for this example.
+
+The `prob` column corresponds to the bar plot above.
+
+
+```{r}
+df <- data.frame(model$centers)
+df$prob <- cluster.prob
+```
+
+
+### Second-stage Sampling
+
+We prepare a Gaussian Mixture Model (GMM). Our second stage sampling will be generated from this GMM. The pdf of a GMM is a linear combination of several normal distributions. 
+
+We will define $m$ many bivariate normal distributions. We will also define $m$ weights that sum to $1$.
+
+First, we define the $\sqrt{m}$ many normal distributions by specifying the means and the covariance matrices. We save them in our data frame.
+
+```{r}
+## ------------------------------------------------------------------------
+sigma.new <- function(i) {
+  cov(x.old[which(model$cluster == i), ])
+}
+```
+
+Second, we define the weight vector.
+
+The weight vector is $\pi=\langle \pi_1,\cdots,\pi_{\text{size}}\rangle$ for the Gaussian Mixture Model. The $\pi_j$'s sum to $1$.
+
+```{r}
+cluster.size.percentage <-
+  unlist(lapply(1:size, function(x) {
+    sum(s[which(model$cluster == x)]) / sum(s)
+  }))
+sum(cluster.size.percentage) # = 1
+```
+
+We visualize the weight vector.
+
+```{r}
+## ----plot5--------------------------------------------------------------------
+barplot(
+  cluster.size.percentage,
+  main = "Probability of Clusters",
+  xlab = "Cluster index",
+  names.arg = 1:size,
+  col = "purple"
+)
+```
+
+
+
+Third, we generate $n-m$ many new $x$'s.
+
+We sample uniformly $n-m$ many numbers from $1,2,\cdots,\sqrt{m}$ with replacement. We call this the compenent vector.
+
+We verify the distribution of the components. The bars should only be positive for those clusters with positive probability $\pi$. More specifically it should look similar to the bar plot above. We fit a density plot on top of the histogram.
+
+
+```{r}
+components <- 
+  sample(1:size,
+         prob = cluster.size.percentage,
+         size = (n - m),
+         replace = TRUE)
+## ----plot histogram of components--------------------------------------------------------------------
+hist(
+  components,
+  col  = "purple",
+  breaks = c(0:(size + 1)),
+  prob = TRUE,
+  xaxt = 'n',
+  xlab = "Component Index"
+)
+axis(1,
+     at = seq(0.5, (size + 1.5), by = 1),
+     labels = c(1:(size + 2)),
+     las = 1)
+```
+
+Finally we are ready to construct the GMM. 
+
+```{r}
+sigma.array <- lapply(1:size, function(x) unlist(sigma.new(x)))
+mean.array <- lapply(1:size, function(x) df[,1:4][x, ])
+df$sigma <- sigma.array
+```
+
+
+
+We can visualize the GMM by plotting each normal distribution in the GMM. Each normal distribution should line up well with the underlying original cluster points that the normal distribution was constructed upon.
+
+Each cluster comes with two plots. 
+
+The first one shows the original sampled $x$'s, colored by cluster indices. It also shows the solid red-blue gradient colored points from the normal distribution. Blue indicates high pdf values while red indicates low pdf values.
+
+The second plot shows the contour plot of the normal distribution pdf.
+
+For illustration purpose, we just plot three clusters.
+
+```{r}
+## ----plot to visualize.gmm--------------------------------------------------------------------
+plot.cluster <- function(counter){ # counter indicate cluster indices
+  
+  num.sample <- 300 # sample 300 times from each normal.
+  
+  this.cluster.points <- rmvnorm(
+    num.sample, mean = unlist(mean.array[counter]),
+    sigma = matrix(unlist(sigma.array[counter]),4,4) # CRQ: updated this
+  ) # generate points from the normal
+  
+  df.tmp1 <- data.frame(this.cluster.points) # save the generated points in a data frame
+  
+  df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),4,4)))) # compute the pdf of the normal at each sampled point
+  # CRQ: updated this
+  
+  df.tmp2 <- data.frame(cbind(x.old[which(model$cluster==counter),],0)) # obtain the sampled points belonging to this cluster from stage-one sampling
+  
+  names(df.tmp2) <- names(df.tmp1)
+  df.tmp1 <- rbind(df.tmp1, df.tmp2) # combine the two temporary data frames
+  
+  rbPal <- colorRampPalette(c('red','blue')) # specify color scale.
+  
+  df.tmp1$Col <- rbPal(nrow(df.tmp1))[as.numeric(cut(df.tmp1$prob, breaks = nrow(df.tmp1)))] # adds a column of color values based on the y values.
+  
+  plot(x.old,
+       col = model$cluster,
+       xlim = c(-1.2, 1.2),
+       ylim = c(-1.2, 1.2),
+       pch = model$cluster,
+       main = paste("Sampling from Normal Distribution #", counter))
+  grid()
+  points(model$centers, col = 1:size, pch = 2)
+  text(model$centers[,1], model$centers[,2], labels=as.character(1:size), col="dark orange", pos=c(1), offset=-0.16)
+  
+  points(df.tmp1$X1[1:num.sample],df.tmp1$X2[1:num.sample],pch = 20,col = alpha(df.tmp1$Col[1:num.sample],0.5))
+}
+```
+
+We plot the normal distributions.
+
+```{r}
+for (j in 1:3){
+  plot.cluster(j)
+  # Simulate bivariate normal data, using code from http://blog.revolutionanalytics.com/2016/02/multivariate_data_with_r.html
+  mu <- unlist(mean.array[j])  # Mean
+  Sigma <-  matrix(unlist(sigma.array[j]),4,4) # Covariance matrix # CRQ: updated this
+  bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma)  # from Mass package
+  head(bivn)
+  # Calculate kernel density estimate
+  bivn.kde <- kde2d(bivn[,1], bivn[,2], n = 50)
+  image(bivn.kde) # from base graphics package
+  contour(bivn.kde, add = TRUE)
+}
+```
+
+We generate $(n-m)$ many $x$'s from the GMM. For each $x$, we sample a $y$ from $Y|X=x$. We evaluate $s(y)$. 
+
+```{r}
+x.new <- ldply( 
+  components,
+  .fun = function(x) {
+    mvrnorm(1,
+            mu = unlist(mean.array[[x]]),
+            Sigma = sigma.array[[x]])
+  }
+)
+y.new <- ldply(
+  1:nrow(x.new),
+  .fun = function(x)
+    v(as.numeric(x.new[x, ]))
+)
+s.new <- ldply(
+  1:nrow(x.new),
+  .fun = function(x) {
+    ifelse(y.new[x, ] > zeta, 1, 0)
+  }
+)
+```
+
+
+We can visualize this sample in the density plot.
+
+```{r}
+density <- kde2d(x.new[, 1], x.new[, 2], n = 50)
+points.tmp <- data.frame(x = x.new[, 1], y = x.new[, 2])
+p.old2 <- interp.surface(density, points.tmp)
+      
+## ----plot gmm kde ----------------------------------------------------------------
+filled.contour(density, color.palette = colorRampPalette(c(
+  'white', 'blue',
+  'yellow', 'red',
+  'darkred'
+)))
+```
+
+We visualize the new $x$'s.
+
+```{r}
+plot(data.frame(x.new), 
+     pch = ".", 
+     col = alpha("purple", 0.5))
+```
+
+
+We compute two probabilies of each newly sampled $x$'s in the second stage. One, called "p.old", is from the noisy circle. The other, called "p.new", is from GMM.
+
+```{r}
+p.old <- circle.density.df(as.matrix(x.new[,1:2]))
+p.old <- p.old * dmvnorm(x.new[,3:4], c(0,0), 0.01 * diag(2))
+
+p.new <- cluster.size.percentage[1] * dmvnorm(x.new, unlist(mean.array[[1]]), sigma.array[[1]])
+for (j in 2:size) {
+  p.new <- p.new + cluster.size.percentage[j] * dmvnorm(x.new, unlist(mean.array[[j]]), sigma.array[[j]])
+}
+```
+
+We compute the estimator obtained.
+
+```{r}
+## ------------------------------------------------------------------------
+estimator.new <- mean(s.new[, 1] / p.new * p.old)
+estimator.new
+```
+
+## The Importance Sampling Algorithm as a whole.
+We dive into the algorithm. 
 
 ```{r}
 sample.once.importance <- function(n=2000){
@@ -160,32 +665,6 @@ sample.once.importance <- function(n=2000){
 
 
 
-## The Naive Algorithm
-
-```{r}
-sample.once.naive <- function(n=2000){
-  m <- n
-  ## ------------------------------------------------------------------------
-  zeta <- 1.35
-  m <- floor (n^(2/3)) # first-stage samples 
-  theta <- runif(m, 0, 2 * pi)
-  u <- cbind(cos(theta), sin(theta))
-  epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
-  x <- u + epsilon
-  x.old <- x
-  
-  v <- function(x) {
-    return(rnorm(1, exp(x[1] + x[2]), 1))
-  }
-  
-  ## ------------------------------------------------------------------------
-  y <- unlist(lapply(1:m, function(x) v(x.old[x,]))) # these are the sampled V's. 
-  
-  ## ------------------------------------------------------------------------
-  s <- ifelse(y>zeta, 1, 0)
-  return(mean(s))
-}
-```
 
 ## Run the Algorithms
 
@@ -217,7 +696,7 @@ We note that there are a few estimators that are very large (e.g. $2$ out of $10
 ## Plot the Mean Squared Errors
 
 ```{r load myData, echo=FALSE}
-load("dummy-dimension.RData")
+load("/Users/chenruqian/Documents/GitHub/Importance-Sampling/dummy-dimension.RData")
 ```
 
 We note that for $n=1000, 2000, 4000, 8000$, naive sampling behaves better than importance sampling. When $n=16000$, importance sampling starts to outperform naive sampling.
