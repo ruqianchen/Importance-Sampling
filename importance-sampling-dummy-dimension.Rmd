@@ -94,6 +94,12 @@ n <- 2000 # total samples
 m <- floor (n^(2/3)) # first-stage samples, m = 158
 ```
 
+### Define the Dimension of Noise
+
+```{r}
+noise.dim <- 2
+```
+
 ### First-stage Sampling
 We sample $m=158$ many $X$ from the natural distribution in the following steps.
 
@@ -120,7 +126,10 @@ grid()
 We add two dummy dimensions.
 
 ```{r}
-x <- cbind(x,  mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2)))
+x <- cbind(x,  mvrnorm(m, 
+                       mu = rep(0, noise.dim), 
+                       Sigma = 0.01 * diag(noise.dim)))
+
 x.old <- x
 ```
 
@@ -410,7 +419,7 @@ Finally we are ready to construct the GMM.
 
 ```{r}
 sigma.array <- lapply(1:size, function(x) unlist(sigma.new(x)))
-mean.array <- lapply(1:size, function(x) df[,1:4][x, ])
+mean.array <- lapply(1:size, function(x) df[,1:(2 + noise.dim)][x, ])
 df$sigma <- sigma.array
 ```
 
@@ -434,13 +443,13 @@ plot.cluster <- function(counter){ # counter indicate cluster indices
   
   this.cluster.points <- rmvnorm(
     num.sample, mean = unlist(mean.array[counter]),
-    sigma = matrix(unlist(sigma.array[counter]),4,4) # CRQ: updated this
+    sigma = matrix(unlist(sigma.array[counter]),(2 + noise.dim), (2 + noise.dim)) # CRQ: updated this
   ) # generate points from the normal
   
   df.tmp1 <- data.frame(this.cluster.points) # save the generated points in a data frame
   
-  df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),4,4)))) # compute the pdf of the normal at each sampled point
-  # CRQ: updated this
+  df.tmp1$prob <- unlist(lapply(1:num.sample, function(x)dmvnorm(this.cluster.points[x,], mean = unlist(mean.array[counter]), sigma = matrix(unlist(sigma.array[counter]),(2 + noise.dim), (2 + noise.dim))))) # compute the pdf of the normal at each sampled point
+  
   
   df.tmp2 <- data.frame(cbind(x.old[which(model$cluster==counter),],0)) # obtain the sampled points belonging to this cluster from stage-one sampling
   
@@ -472,7 +481,7 @@ for (j in 1:3){
   plot.cluster(j)
   # Simulate bivariate normal data, using code from http://blog.revolutionanalytics.com/2016/02/multivariate_data_with_r.html
   mu <- unlist(mean.array[j])  # Mean
-  Sigma <-  matrix(unlist(sigma.array[j]),4,4) # Covariance matrix # CRQ: updated this
+  Sigma <-  matrix(unlist(sigma.array[j]), (2 + noise.dim), (2 + noise.dim)) # Covariance matrix
   bivn <- mvrnorm(5000, mu = mu, Sigma = Sigma)  # from Mass package
   head(bivn)
   # Calculate kernel density estimate
@@ -535,7 +544,11 @@ We compute two probabilies of each newly sampled $x$'s in the second stage. One,
 
 ```{r}
 p.old <- circle.density.df(as.matrix(x.new[,1:2]))
-p.old <- p.old * dmvnorm(x.new[,3:4], c(0,0), 0.01 * diag(2))
+if (noise.dim == 1){
+  p.old <- p.old * dnorm(x.new[, (2+1):(2+noise.dim)], 0, 0.01)
+} else{
+  p.old <- p.old * dmvnorm(x.new[,(2+1):(2+noise.dim)], rep(0, noise.dim), 0.01 * diag(noise.dim))
+}
 
 p.new <- cluster.size.percentage[1] * dmvnorm(x.new, unlist(mean.array[[1]]), sigma.array[[1]])
 for (j in 2:size) {
@@ -558,12 +571,15 @@ We dive into the algorithm.
 sample.once.importance <- function(n=2000){
   out <- tryCatch(
     {
+      noise.dim <- 2
       m <- floor (n^(2/3)) # first-stage samples 
       theta <- runif(m, 0, 2 * pi)
       u <- cbind(cos(theta), sin(theta))
       epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
       x <- u + epsilon
-      x <- cbind(x,  mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2)))
+      x <- cbind(x,  mvrnorm(m, 
+                       mu = rep(0, noise.dim), 
+                       Sigma = 0.01 * diag(noise.dim)))
       x.old <- x
       
       v <- function(x) {
@@ -616,7 +632,7 @@ sample.once.importance <- function(n=2000){
       
       ## ------------------------------------------------------------------------
       sigma.array <- lapply(1:size, function(x) unlist(sigma.new(x)))
-      mean.array <- lapply(1:size, function(x) df[,1:4][x, ])
+      mean.array <- lapply(1:size, function(x) df[,1:(2 + noise.dim)][x, ])
       df$sigma <- sigma.array
 
       
@@ -644,8 +660,11 @@ sample.once.importance <- function(n=2000){
       
       ## ------------------------------------------------------------------------
       p.old <- circle.density.df(as.matrix(x.new[,1:2]))
-      p.old <- p.old * dmvnorm(x.new[,3:4], c(0,0), 0.01 * diag(2))
-      
+      if (noise.dim == 1){
+        p.old <- p.old * dnorm(x.new[, (2+1):(2+noise.dim)], 0, 0.01)
+      } else{
+        p.old <- p.old * dmvnorm(x.new[,(2+1):(2+noise.dim)], rep(0, noise.dim), 0.01 * diag(noise.dim))
+      }
       p.new <- cluster.size.percentage[1] * dmvnorm(x.new, unlist(mean.array[[1]]), sigma.array[[1]])
       for (j in 2:size) {
         p.new <- p.new + cluster.size.percentage[j] * dmvnorm(x.new, unlist(mean.array[[j]]), sigma.array[[j]])
@@ -674,18 +693,23 @@ results2000 <- sample.once.importance(2000)
 results4000 <- sample.once.importance(4000)
 results8000 <- sample.once.importance(8000)
 results16000 <- sample.once.importance(16000)
+results1000.naive <- sample.once.naive(1000)
+results2000.naive <- sample.once.naive(2000)
+results4000.naive <- sample.once.naive(4000)
+results8000.naive <- sample.once.naive(8000)
+results16000.naive <- sample.once.naive(16000)
 
 for (tmp.counter in 1:10000){
   results1000 <- c(results1000, sample.once.importance(1000))
   results2000 <- c(results2000, sample.once.importance(2000))
   results4000 <- c(results4000, sample.once.importance(4000))
   results8000 <- c(results8000, sample.once.importance(8000))
-  results16000 <- c(results8000, sample.once.importance(16000))
+  results16000 <- c(results16000, sample.once.importance(16000))
   results1000.naive <- c(results1000.naive, sample.once.naive(1000))
   results2000.naive <- c(results2000.naive, sample.once.naive(2000))
   results4000.naive <- c(results4000.naive, sample.once.naive(4000))
   results8000.naive <- c(results8000.naive, sample.once.naive(8000))
-  results16000.naive <- c(results8000.naive, sample.once.naive(16000))
+  results16000.naive <- c(results16000.naive, sample.once.naive(16000))
 }
 ```
 

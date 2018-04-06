@@ -1,0 +1,372 @@
+---
+title: "Importance Sampling for Stochastic Simulation on a Noisy Circle, some numerical results"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+## Outline
+
+We focus on two parameters to set. One is the number of dummy noise dimensions. We call it "noise.dim". The other is the variation in the dummy dimensions. We set the variation by setting the diagonal entries in the covariance matrix of the normal dummy noise dimension. We call it "noise.var".
+
+In our earlier notes, the "noise.var" is set to be $0.01$, which is the same as in the structural dimension. Here we reduce "noise.var" from $0.01$ to $0.0001$.
+
+## Set Some Parameters
+
+```{r, set-param}
+noise.dim <- 1
+noise.var <- 0.0001
+```
+
+## Packages and Auxilary Functions
+
+```{r, message=FALSE, warning=FALSE}
+library(distr)
+library(plyr)
+library(mclust)
+library(MASS)
+library(ggplot2)
+library(mvtnorm)
+library(fields)
+
+circle.density <- function(x.tmp = c(0,0), n.cut = 100){
+  theta.tmp <- seq(0, 2*pi, by = 2*pi/n.cut)   
+  u.tmp <- cbind(cos(theta.tmp), sin(theta.tmp))
+  d.tmp <- sum(unlist(lapply(1:nrow(u.tmp), function(x){dmvnorm(x.tmp, mean = u.tmp[x,], sigma = 0.01 * diag(2))})))/n.cut
+  return(d.tmp)
+}
+
+circle.density.df <- function(x.tmp = c(0,0), n.cut = 100){
+  theta.tmp <- seq(0, 2*pi, length.out = n.cut + 1)   
+  u.tmp <- cbind(cos(theta.tmp), sin(theta.tmp))
+  d.tmp <- dmvnorm(x.tmp, u.tmp[1,], 0.01 * diag(2))
+  for (j in 2:n.cut){
+    d.tmp <- d.tmp + dmvnorm(x.tmp, u.tmp[j,], 0.01 * diag(2))
+  }
+  d.tmp <- d.tmp / n.cut
+  return(d.tmp)
+}
+
+zeta <- 1.35 # this is chosen to be the median of one trial y. Goal is this represents P(Y>zeta)= 0.5.
+v <- function(x) {
+  return(rnorm(1, exp(x[1] + x[2]), 1)) 
+}
+```
+
+## The Naive Estimator
+
+```{r}
+sample.once.naive <- function(n=2000){
+  m <- n
+  ## ------------------------------------------------------------------------
+  m <- floor (n^(2/3)) # first-stage samples 
+  theta <- runif(m, 0, 2 * pi)
+  u <- cbind(cos(theta), sin(theta))
+  epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
+  x <- u + epsilon
+  x.old <- x
+  
+  v <- function(x) {
+    return(rnorm(1, exp(x[1] + x[2]), 1))
+  }
+  
+  ## ------------------------------------------------------------------------
+  y <- unlist(lapply(1:m, function(x) v(x.old[x,]))) # these are the sampled V's. 
+  
+  ## ------------------------------------------------------------------------
+  s <- ifelse(y>zeta, 1, 0)
+  return(mean(s))
+}
+```
+
+
+## The Importance Sampling Algorithm
+
+```{r}
+sample.once.importance <- function(n=2000){
+  out <- tryCatch(
+    {
+      m <- floor (n^(2/3)) # first-stage samples 
+      theta <- runif(m, 0, 2 * pi)
+      u <- cbind(cos(theta), sin(theta))
+      epsilon <- mvrnorm(m, mu = c(0, 0), Sigma = 0.01 * diag(2))
+      x <- u + epsilon
+      x <- cbind(x,  mvrnorm(m, 
+                             mu = rep(0, noise.dim), 
+                             Sigma =  noise.var * diag(noise.dim)))
+      x.old <- x
+      
+      v <- function(x) {
+        return(rnorm(1, exp(x[1] + x[2]), 1))
+      }
+      
+      ## ------------------------------------------------------------------------
+      y <- unlist(lapply(1:m, function(x) v(x.old[x, ]))) # these are the sampled V's.
+      
+      ## ------------------------------------------------------------------------
+      s <- ifelse(y > zeta, 1, 0)
+      
+      ## ------------------------------------------------------------------------
+      size <- floor(sqrt(m))  # number of k-means clusters
+      model <- kmeans(x.old, size)
+      cluster.size.count <-
+        unlist(lapply(1:size, function(x) {
+          length(which(model$cluster == x))
+        }))
+      
+      ## ------------------------------------------------------------------------
+      cluster.prob <-
+        unlist(lapply(1:nrow(model$centers), function(x) {
+          mean(s[which(model$cluster == x)])
+        }))
+      
+      ## ------------------------------------------------------------------------
+      df <- data.frame(model$centers)
+      df$prob <- cluster.prob
+      
+      ## ------------------------------------------------------------------------
+      sigma.new <- function(i) {
+        cov(x.old[which(model$cluster == i), ])
+      }
+      
+      ## ------------------------------------------------------------------------
+      cluster.size.percentage <-
+        unlist(lapply(1:size, function(x) {
+          sum(s[which(model$cluster == x)]) / sum(s)
+        }))
+      
+      ## ------------------------------------------------------------------------
+      components <- 
+        sample(1:size,
+               prob = cluster.size.percentage,
+               size = (n - m),
+               replace = TRUE)
+      
+      ## ------------------------------------------------------------------------
+      sigma.array <- lapply(1:size, function(x) unlist(sigma.new(x)))
+      mean.array <- lapply(1:size, function(x) df[,1:(2 + noise.dim)][x, ])
+      df$sigma <- sigma.array
+      
+      
+      ## ------------------------------------------------------------------------
+      x.new <- ldply( 
+        components,
+        .fun = function(x) {
+          mvrnorm(1,
+                  mu = unlist(mean.array[[x]]),
+                  Sigma = sigma.array[[x]])
+        }
+      )
+      
+      y.new <- ldply(
+        1:nrow(x.new),
+        .fun = function(x)
+          v(as.numeric(x.new[x, ]))
+      )
+      s.new <- ldply(
+        1:nrow(x.new),
+        .fun = function(x) {
+          ifelse(y.new[x, ] > zeta, 1, 0)
+        }
+      )
+      
+      ## ------------------------------------------------------------------------
+      p.old <- circle.density.df(as.matrix(x.new[,1:2]))
+      if (noise.dim == 1){
+        p.old <- p.old * dnorm(x.new[, (2+1):(2+noise.dim)], 0, noise.var)
+      } else{
+        p.old <- p.old * dmvnorm(x.new[,(2+1):(2+noise.dim)], rep(0, noise.dim), noise.var * diag(noise.dim))
+      }
+      p.new <- cluster.size.percentage[1] * dmvnorm(x.new, unlist(mean.array[[1]]), sigma.array[[1]])
+      for (j in 2:size) {
+        p.new <- p.new + cluster.size.percentage[j] * dmvnorm(x.new, unlist(mean.array[[j]]), sigma.array[[j]])
+      }
+      
+      ## ------------------------------------------------------------------------
+      estimator.new <- mean(s.new[, 1] / p.new * p.old)
+      return(estimator.new)
+    },
+    error = function(cond){
+      return(-999)
+    }
+  )
+  return(out)
+}
+```
+
+
+## Run the Algorithm
+
+```{r load myData, echo=FALSE}
+load("/Users/chenruqian/Documents/GitHub/Importance-Sampling/numerical-results.RData")
+```
+
+
+Using code in the following format (with a change in $n$), we collect some numerical evidence. Based on previous notes, we think MSE stabilizes after around 3000 similations.
+
+```{r, eval = FALSE}
+results1000 <- sample.once.importance(n=1000)
+results1000.naive <- sample.once.naive(1000)
+
+for (tmp.counter in 1:3000){
+  results1000 <- c(results1000, sample.once.importance(1000))
+  results1000.naive <- c(results1000.naive, sample.once.naive(1000))
+}
+```
+
+
+
+### First we see $n=6000$.
+
+For $n=6000$, the importance sampling method outperforms the naive sampling method.
+
+```{r}
+df.tmp <- data.frame(results6000[results6000<1 & results6000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+plot(1:nrow(df.tmp), 
+     mse.tmp[,1], 
+     type = "l", 
+     col = "black",
+     lty = "solid",
+     main = "MSE with Different Numbers of Samples", 
+     ylim = c(0, 0.0015),
+     xlab = "Number of Simulations",
+     ylab = "MSE")
+df.tmp <- data.frame(results6000.naive[results6000.naive<1 & results6000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "black",
+      lty = "dotted")
+legend('topleft', 
+       bg="transparent",
+       c("importance", "naive"), 
+       lty = c("solid", "dotted"),
+       col = c("black"),
+       bty = 'y', 
+       lwd = 2)
+```
+
+
+### For smaller number of simulations, naive sampling outperforms improtance sampling in terms of MSEs.
+
+For $n=1000, 2000$, naive sampling behaves better than importance sampling. When $n=4000$, the two performs similarly.
+
+```{r}
+df.tmp <- data.frame(results1000[results1000<1 & results1000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+plot(1:nrow(df.tmp), 
+     mse.tmp[,1], 
+     type = "l", 
+     col = "firebrick",
+     lty = "solid",
+     main = "MSE with Different Numbers of Samples", 
+     ylim = c(0, 0.01),
+     xlab = "Number of Simulations",
+     ylab = "MSE")
+df.tmp <- data.frame(results2000[results2000<1 & results2000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "aquamarine4",
+      lty = "solid")
+df.tmp <- data.frame(results4000[results4000<1 & results4000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkorchid4",
+      lty = "solid")
+grid()
+legend('topright',
+       bg="transparent",
+       c("n=1000", "n=2000", "n=4000"),
+       lty = c("solid"),
+       col = c("firebrick", "aquamarine4", "darkorchid4"),
+       bty = 'y',
+       lwd = 2,
+       title = "Importance Sampling",
+       title.col = "black",
+       cex = 1)
+df.tmp <- data.frame(results1000.naive[results1000.naive<1 & results1000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "firebrick1",
+      lty = "dotted",
+      xlab = "Number of Simulations",
+      ylab = "MSE")
+df.tmp <- data.frame(results2000.naive[results2000.naive<1 & results2000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "mediumaquamarine",
+      lty = "dotted")
+df.tmp <- data.frame(results4000.naive[results4000.naive<1 & results4000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkorchid1",
+      lty = "dotted")
+legend('topleft',
+       bg="transparent",
+       c("n=1000", "n=2000", "n=4000"),
+       lty = c("dotted"),
+       col = c("firebrick1", "mediumaquamarine", "darkorchid1"),
+       bty = 'y',
+       lwd = 2,
+       title = "Naive Sampling",
+       title.col = "black",
+       cex = 1)
+```
+
+We zoom in to $n=4000$. The two methods perform similarly in terms of MSE.
+
+```{r, echo = FALSE}
+df.tmp <- data.frame(results4000[results4000<1 & results4000>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+plot(1:nrow(df.tmp), 
+     mse.tmp[,1], 
+     type = "l", 
+     col = "darkorchid4",
+     lty = "solid",
+     main = "MSE with n = 4000", 
+     ylim = c(0, 0.003),
+     xlab = "Number of Simulations",
+     ylab = "MSE")
+grid()
+legend('topright',
+       bg="transparent",
+       c("n=4000"),
+       lty = c("solid"),
+       col = c("darkorchid4"),
+       bty = 'y',
+       lwd = 2,
+       title = "Importance Sampling",
+       title.col = "black",
+       cex = 1)
+df.tmp <- data.frame(results4000.naive[results4000.naive<1 & results4000.naive>0])
+mse.tmp <- ldply(1:nrow(df.tmp), .fun = function(x){mean((df.tmp[1:x,1]-0.5)^2)})
+lines(1:nrow(df.tmp), 
+      mse.tmp[,1], 
+      type = "l", 
+      col = "darkorchid1",
+      lty = "dotted")
+legend('topleft',
+       bg="transparent",
+       c("n=4000"),
+       lty = c("dotted"),
+       col = c("darkorchid1"),
+       bty = 'y',
+       lwd = 2,
+       title = "Naive Sampling",
+       title.col = "black",
+       cex = 1)
+```
+
+
