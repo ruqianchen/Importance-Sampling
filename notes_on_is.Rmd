@@ -1,0 +1,75 @@
+---
+title: "Importance Sampling with Multiple Initializations of K-Means"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+
+## Summary
+We explore the parameter $k$ in the K-means clustering used in the importance sampling algorithm.
+
+
+## Introduction
+
+In earlier notes, we have compared importance sampling with naive sampling on two functions on circles in 2D and 3D. We find that the importance sampler produces less variance than the naive sampler, and the reduction is more pronounced as the sample size increaes. 
+
+In this note, we focus on improving the importance sampling estimator, and more specifically, improving the Gaussian mixture model (GMM) used in the second-stage of the importance sampling estimator. We will improve the GMM by running k-means clustering multiple times and choosing the best one to generate the GMM. We find that we can improve the performance of the importance sampler if we run the $k$-means more times.
+
+<!-- Importance sampling is a method to reduce variance in sampling. -->
+<!-- We compare the importance sampling algorithm with the naive sampling algorithm. The naive sampling works as follows. -->
+
+## Parameters
+
+We have a variety of parameters parameters that we can change in the two estimators. The parameters are listed below. In this note, we focus on the $k$ in the K-Means clustering.
+
+- $n$, the sample size. This is the number of points we sample in total. This is used for both estimators. For importance sampling, this includes both points in the first stage from the starting distribution and  points in the second stage from the Gaussian mixture. For naive sampling, this is the number of points sampled from the starting distribution. In the experiments, we often take $n$ to be $2000$, but varies it from $1000$ to $16000$.
+
+- $m$, the sample size. This is used for just the importance estimator. This is the number of points we sample in the first stage from the starting distribution. In the experiments, we often take $m$ to be $n^{2/3}$.
+
+- $k$, the number of clusters. This is used for just the importance estimator. This is the number of clusters we produce in the $k$-means clustering algorithm. Based on the $k$-means clustering, we build the Gaussian mixture distribution used to generate the second stage samples. We often take $k$ to be $\sqrt{m}$.
+
+
+- $n_kmeans$, the number of $k$-means we perform per simulation. 
+
+- $n_{sim}$, the number of simulations. This is used for both estimators. We take $n_{sim}$ to be $2000$ as default and often vary it to be $1000$ through $16000$ to see how MSE changes as $n_{sim}$ changes.
+
+
+
+## Code
+First, we present the utility code.
+```{r, eval = FALSE}
+library(distr)
+library(plyr)
+library(mclust)
+library(MASS)
+library(ggplot2)
+library(mvtnorm)
+library(fields)
+
+circle.density <- function(x.tmp = c(0,0), n.cut = 100){
+  theta.tmp <- seq(0, 2*pi, by = 2*pi/n.cut)   
+  u.tmp <- cbind(cos(theta.tmp), sin(theta.tmp))
+  d.tmp <- sum(unlist(lapply(1:nrow(u.tmp), function(x){dmvnorm(x.tmp, mean = u.tmp[x,], sigma = 0.01 * diag(2))})))/n.cut
+  return(d.tmp)
+}
+
+
+circle.density.df <- function(x.tmp = c(0,0), n.cut = 100){
+  theta.tmp <- seq(0, 2*pi, length.out = n.cut + 1)   
+  u.tmp <- cbind(cos(theta.tmp), sin(theta.tmp))
+  d.tmp <- dmvnorm(x.tmp, u.tmp[1,], 0.01 * diag(2))
+  for (j in 2:n.cut){
+    d.tmp <- d.tmp + dmvnorm(x.tmp, u.tmp[j,], 0.01 * diag(2))
+  }
+  d.tmp <- d.tmp / n.cut
+  return(d.tmp)
+}
+
+zeta <- 1.35 # this is chosen to be the median of one trial y. Goal is this represents P(Y>zeta)= 0.5.
+v <- function(x) {
+  return(rnorm(1, exp(x[1] + x[2]), 1)) 
+}
+```
+
+
